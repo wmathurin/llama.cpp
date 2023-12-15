@@ -1387,6 +1387,8 @@ struct llama_vocab {
     id special_suffix_id = 32008;
     id special_eot_id    = 32010;
 
+    bool is_xgen = false;
+
     int find_bpe_rank(std::string token_left, std::string token_right) const {
         GGML_ASSERT(token_left.find(" ") == std::string::npos);
         GGML_ASSERT(token_left.find("\n") == std::string::npos);
@@ -2677,9 +2679,15 @@ static void llm_load_vocab(
             vocab.type = LLAMA_VOCAB_TYPE_SPM;
 
             // default special tokens
-            vocab.special_bos_id = 1;
-            vocab.special_eos_id = 2;
-            vocab.special_unk_id = 0;
+            if (vocab.is_xgen) {
+                vocab.special_bos_id = 50256;
+                vocab.special_eos_id = 50256;
+                vocab.special_unk_id = 2954;
+            } else {
+                vocab.special_bos_id = 1;
+                vocab.special_eos_id = 2;
+                vocab.special_unk_id = 0;
+            }
             vocab.special_sep_id = -1;
             vocab.special_pad_id = -1;
         } else if (tokenizer_name == "gpt2") {
@@ -2730,7 +2738,9 @@ static void llm_load_vocab(
 
     for (uint32_t i = 0; i < n_vocab; i++) {
         std::string word = gguf_get_arr_str(ctx, token_idx, i);
-        GGML_ASSERT(codepoints_from_utf8(word).size() > 0);
+        if (!vocab.is_xgen) {
+            GGML_ASSERT(codepoints_from_utf8(word).size() > 0);
+        }
 
         vocab.token_to_id[word] = i;
 
@@ -6241,11 +6251,15 @@ static uint8_t llama_token_to_byte(const llama_vocab& vocab, llama_token id) {
 }
 
 static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
-    static const char * hex = "0123456789ABCDEF";
     switch (llama_vocab_get_type(vocab)) {
     case LLAMA_VOCAB_TYPE_SPM: {
-        const char buf[7] = { '<', '0', 'x', hex[ch >> 4], hex[ch & 15], '>', 0 };
-        return vocab.token_to_id.at(buf);
+        if (vocab.is_xgen) {
+            return vocab.token_to_id.at(std::string(1, ch));
+        } else {
+            static const char * hex = "0123456789ABCDEF";
+            const char buf[7] = { '<', '0', 'x', hex[ch >> 4], hex[ch & 15], '>', 0 };
+            return vocab.token_to_id.at(buf);
+        }
     }
     case LLAMA_VOCAB_TYPE_BPE: {
         return vocab.token_to_id.at(bytes_to_unicode_bpe(ch));
@@ -6890,7 +6904,9 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                         fprintf(stderr,"TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
 #endif
                         llm_tokenizer_spm tokenizer(vocab);
-                        llama_escape_whitespace(raw_text);
+                        if (!vocab.is_xgen) {
+                            llama_escape_whitespace(raw_text);
+                        }
                         tokenizer.tokenize(raw_text, output);
                     }
                     else // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
@@ -8908,6 +8924,7 @@ struct llama_model_params llama_model_default_params() {
         /*.vocab_only                  =*/ false,
         /*.use_mmap                    =*/ true,
         /*.use_mlock                   =*/ false,
+        /*.is_xgen                     =*/ false,
     };
 
 #ifdef GGML_USE_METAL
@@ -9003,6 +9020,7 @@ struct llama_model * llama_load_model_from_file(
     ggml_time_init();
 
     llama_model * model = new llama_model;
+    llama_set_model_type(model, params.is_xgen);
 
     unsigned cur_percentage = 0;
     if (params.progress_callback == NULL) {
@@ -10331,4 +10349,8 @@ static void llama_log_callback_default(ggml_log_level level, const char * text, 
     (void) user_data;
     fputs(text, stderr);
     fflush(stderr);
+}
+
+void llama_set_model_type(struct llama_model *model, bool is_xgen) {
+    model->vocab.is_xgen = is_xgen;
 }

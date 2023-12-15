@@ -132,6 +132,8 @@ struct gpt_params {
     // multimodal models (see examples/llava)
     std::string mmproj = ""; // path to multimodal projector
     std::string image  = ""; // path to an image file
+
+    bool is_xgen       = false; // Salesforce XGen model
 };
 
 bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params);

@@ -192,6 +192,8 @@ extern "C" {
         bool vocab_only; // only load the vocabulary, no weights
         bool use_mmap;   // use mmap if possible
         bool use_mlock;  // force system to keep model in RAM
+
+        bool is_xgen;    // Salesforce Xgen model
     };
 
     struct llama_context_params {
@@ -848,6 +850,8 @@ extern "C" {
     LLAMA_API void llama_log_set(ggml_log_callback log_callback, void * user_data);
 
     LLAMA_API void llama_dump_timing_info_yaml(FILE * stream, const struct llama_context * ctx);
+
+    LLAMA_API void llama_set_model_type(struct llama_model *model, bool is_xgen);
 
 #ifdef __cplusplus
 }

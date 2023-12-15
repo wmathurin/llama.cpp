@@ -757,7 +757,10 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
         // End of Parse args for logging parameters
+
 #endif // LOG_DISABLE_LOGS
+        } else if (arg == "-X") {
+            params.is_xgen = true;
         } else {
             throw std::invalid_argument("error: unknown argument: " + arg);
         }
@@ -1024,6 +1027,8 @@ struct llama_model_params llama_model_params_from_gpt_params(const gpt_params & 
         GGML_ASSERT(params.kv_overrides.back().key[0] == 0 && "KV overrides not terminated with empty key");
         mparams.kv_overrides = params.kv_overrides.data();
     }
+
+    mparams.is_xgen          = params.is_xgen;
 
     return mparams;
 }
